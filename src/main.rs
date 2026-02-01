@@ -15,6 +15,17 @@ type HmacSha1 = Hmac<sha1::Sha1>;
 
 #[derive(Parser, Debug)]
 struct Cli {
+    #[command(subcommand)]
+    mode: Mode,
+}
+
+#[derive(Subcommand, Debug)]
+enum Mode {
+    Encode(Encode),
+}
+
+#[derive(Parser, Debug)]
+struct Encode {
     #[arg(short, long, default_value = "")]
     prefix: String,
 
@@ -130,17 +141,15 @@ struct TsunamiPayload {
     major_warning: Vec<u32>,
 }
 
-fn main() {
-    let cli = Cli::parse();
-
-    if let Encoding::Base65536(payload) = &cli.encoding {
+fn encode(e: &Encode) {
+    if let Encoding::Base65536(payload) = &e.encoding {
         let Payload::V0(_) = payload.payload else {
             eprintln!("Unsupported paylod for Base65536 format");
             return;
         };
     }
 
-    let (hmac_key, payload) = match &cli.encoding {
+    let (hmac_key, payload) = match &e.encoding {
         Encoding::Base32768(payload) => (&payload.hmac_key, &payload.payload),
         Encoding::Base65536(payload) => (&payload.hmac_key, &payload.payload),
     };
@@ -226,7 +235,7 @@ fn main() {
     buffer.push(id);
 
     // Add non-base65536 marker
-    if let Encoding::Base32768(_) = &cli.encoding {
+    if let Encoding::Base32768(_) = &e.encoding {
         buffer.push(0xFF);
     }
 
@@ -236,10 +245,18 @@ fn main() {
     // Add Body
     buffer.extend_from_slice(&body);
 
-    let encoded = match &cli.encoding {
+    let encoded = match &e.encoding {
         Encoding::Base32768(_) => base32768::encode(&buffer),
         Encoding::Base65536(_) => base65536::encode(&buffer, None),
     };
 
-    println!("{}{encoded}", cli.prefix);
+    println!("{}{encoded}", e.prefix);
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    match &cli.mode {
+        Mode::Encode(e) => encode(e),
+    };
 }

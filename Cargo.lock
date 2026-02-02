@@ -283,7 +283,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "eewbot-url"
+name = "eew-renderer-url"
 version = "0.1.0"
 dependencies = [
  "base32768",

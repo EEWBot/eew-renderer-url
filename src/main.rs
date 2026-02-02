@@ -22,6 +22,12 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Mode {
     Encode(Encode),
+    Decode(Decode),
+}
+
+#[derive(Parser, Debug)]
+struct Decode {
+    url: String,
 }
 
 #[derive(Parser, Debug)]
@@ -253,10 +259,204 @@ fn encode(e: &Encode) {
     println!("{}{encoded}", e.prefix);
 }
 
+fn decode(d: &Decode) {
+    let Ok(url) = urlencoding::decode(&d.url) else {
+        eprintln!("Failed to URL Decoding");
+        return;
+    };
+
+    let encoded_str = url.rsplit_once('/').map(|v| v.1).unwrap_or(&d.url);
+
+    let Some(first_char) = encoded_str.chars().nth(0) else {
+        eprintln!("Failed to get first char for decoding");
+        return;
+    };
+
+    let (mode, bin) = if first_char as u16 & 0xff == 0 {
+        let Ok(bin) = base65536::decode(&encoded_str, false) else {
+            eprintln!("Failed to decode as base65536");
+            return;
+        };
+
+        ("base65536", bin)
+    } else {
+        let Ok(bin) = base32768::decode(&encoded_str) else {
+            eprintln!("Failed to decode as base32768");
+            return;
+        };
+
+        ("base32768", bin)
+    };
+
+    use generic_array::GenericArray;
+    use generic_array::typenum::U20;
+
+    let (version, _provided_sha1, body) = if first_char as u16 & 0xff == 0 {
+        if bin.len() < 21 {
+            eprintln!("Minimum length is not satisfied (base65536)");
+            return;
+        }
+
+        let version = bin[0];
+        let provided_sha1 = GenericArray::<_, U20>::from_slice(&bin[1..21]);
+        let body = &bin[21..];
+
+        (version, provided_sha1, body)
+    } else {
+        if bin.len() < 22 {
+            eprintln!("Minimum length is not satisfied (base32768)");
+            return;
+        }
+
+        let version = bin[0];
+        let _non_base65536_marker = bin[1];
+        let provided_sha1 = GenericArray::<_, U20>::from_slice(&bin[2..22]);
+        let body = &bin[22..];
+
+        (version, provided_sha1, body)
+    };
+
+    let exe = std::env::current_exe().unwrap();
+
+    let exe = exe
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .ok_or("Invalid Executable Name")
+        .unwrap();
+
+    match version {
+        0 => {
+            let data = crate::quake_prefecture::QuakePrefectureData::decode(body)
+                .expect("Valid QuakePrefectureData");
+
+            let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
+
+            println!("{data:#?}");
+
+            print!("{exe} encode {mode} v0");
+            print!(" --time {time:?}");
+
+            if let Some(epicenter) = &data.epicenter {
+                print!(
+                    " --epicenter {},{}",
+                    epicenter.lat_x10 as f32 / 10.0,
+                    epicenter.lon_x10 as f32 / 10.0,
+                );
+            }
+
+            if let Some(one) = &data.one {
+                for code in &one.codes {
+                    print!(" --one {code}");
+                }
+            }
+
+            if let Some(two) = &data.two {
+                for code in &two.codes {
+                    print!(" --two {code}");
+                }
+            }
+
+            if let Some(three) = &data.three {
+                for code in &three.codes {
+                    print!(" --three {code}");
+                }
+            }
+
+            if let Some(four) = &data.four {
+                for code in &four.codes {
+                    print!(" --four {code}");
+                }
+            }
+
+            if let Some(five_minus) = &data.four {
+                for code in &five_minus.codes {
+                    print!(" --five-minus {code}");
+                }
+            }
+
+            if let Some(five_plus) = &data.four {
+                for code in &five_plus.codes {
+                    print!(" --five-plus {code}");
+                }
+            }
+
+            if let Some(six_minus) = &data.four {
+                for code in &six_minus.codes {
+                    print!(" --six-minus {code}");
+                }
+            }
+
+            if let Some(six_plus) = &data.four {
+                for code in &six_plus.codes {
+                    print!(" --six-plus {code}");
+                }
+            }
+
+            if let Some(seven) = &data.four {
+                for code in &seven.codes {
+                    print!(" --seven {code}");
+                }
+            }
+
+            println!();
+        }
+        1 => {
+            let data = crate::tsunami::TsunamiForecastData::decode(body)
+                .expect("Valid TsunamiForecastData");
+
+            let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
+
+            println!("{data:#?}");
+
+            print!("{exe} encode {mode} tsunami");
+            print!(" --time {time:?}");
+
+            if let Some(epicenter) = &data.epicenter {
+                print!(
+                    " --epicenter {},{}",
+                    epicenter.lat_x10 as f32 / 10.0,
+                    epicenter.lon_x10 as f32 / 10.0,
+                );
+            }
+
+            if let Some(forecast) = &data.forecast {
+                for code in &forecast.codes {
+                    print!(" --forecast {code}");
+                }
+            }
+
+            if let Some(advisory) = &data.advisory {
+                for code in &advisory.codes {
+                    print!(" --advisory {code}");
+                }
+            }
+
+            if let Some(warning) = &data.warning {
+                for code in &warning.codes {
+                    print!(" --warning {code}");
+                }
+            }
+
+            if let Some(major_warning) = &data.major_warning {
+                for code in &major_warning.codes {
+                    print!(" --major-warning {code}");
+                }
+            }
+
+            println!();
+        }
+        n => {
+            eprintln!("Unsupported TypeID {n}");
+            return;
+        }
+    };
+}
+
 fn main() {
     let cli = Cli::parse();
 
     match &cli.mode {
         Mode::Encode(e) => encode(e),
+        Mode::Decode(d) => decode(d),
     };
 }

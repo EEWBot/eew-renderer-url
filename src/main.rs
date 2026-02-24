@@ -20,6 +20,7 @@ struct Cli {
 }
 
 #[derive(Subcommand, Debug)]
+#[allow(clippy::large_enum_variant)]
 enum Mode {
     Encode(Encode),
     Decode(Decode),
@@ -246,7 +247,7 @@ fn encode(e: &Encode) {
     }
 
     // Add HMAC
-    buffer.extend_from_slice(&*sha1);
+    buffer.extend_from_slice(&sha1);
 
     // Add Body
     buffer.extend_from_slice(&body);
@@ -267,7 +268,7 @@ fn decode(d: &Decode) {
 
     let encoded_str = url.rsplit_once('/').map(|v| v.1).unwrap_or(&d.url);
 
-    let Some(first_char) = encoded_str.chars().nth(0) else {
+    let Some(first_char) = encoded_str.chars().next() else {
         eprintln!("Failed to get first char for decoding");
         return;
     };
@@ -280,7 +281,7 @@ fn decode(d: &Decode) {
 
         ("base65536", bin)
     } else {
-        let Ok(bin) = base32768::decode(&encoded_str) else {
+        let Ok(bin) = base32768::decode(encoded_str) else {
             eprintln!("Failed to decode as base32768");
             return;
         };
@@ -447,9 +448,8 @@ fn decode(d: &Decode) {
         }
         n => {
             eprintln!("Unsupported TypeID {n}");
-            return;
         }
-    };
+    }
 }
 
 fn main() {

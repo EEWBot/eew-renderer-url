@@ -230,9 +230,19 @@ fn encode(e: &Encode) {
         ),
     };
 
+    let signing_target = match &e.encoding {
+        Encoding::Base65536(_) => body.clone(),
+        Encoding::Base32768(_) => {
+            let mut buffer = Vec::new();
+            buffer.push(id);
+            buffer.extend_from_slice(&body);
+            buffer
+        }
+    };
+
     let sha1 = {
         let mut mac = HmacSha1::new_from_slice(hmac_key.as_bytes()).unwrap();
-        mac.update(&body);
+        mac.update(&signing_target);
         mac.finalize().into_bytes()
     };
 

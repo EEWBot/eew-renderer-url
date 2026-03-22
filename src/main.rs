@@ -62,8 +62,8 @@ struct Base65536 {
 
 #[derive(Subcommand, Debug)]
 enum Payload {
-    Tsunami(TsunamiPayload),
-    V0(V0Payload),
+    TsunamiForecastV0(TsunamiForecastV0Payload),
+    QuakePrefectureV0(QuakePrefectureV0Payload),
 }
 
 #[derive(Clone, Debug)]
@@ -88,7 +88,7 @@ impl std::str::FromStr for Epicenter {
 }
 
 #[derive(Parser, Debug)]
-struct V0Payload {
+struct QuakePrefectureV0Payload {
     #[arg(short, long)]
     time: DateTimeUtc,
 
@@ -124,7 +124,7 @@ struct V0Payload {
 }
 
 #[derive(Parser, Debug)]
-struct TsunamiPayload {
+struct TsunamiForecastV0Payload {
     #[arg(short, long)]
     time: DateTimeUtc,
 
@@ -146,7 +146,7 @@ struct TsunamiPayload {
 
 fn encode(e: &Encode) {
     if let Encoding::Base65536(payload) = &e.encoding {
-        let Payload::V0(_) = payload.payload else {
+        let Payload::QuakePrefectureV0(_) = payload.payload else {
             eprintln!("Unsupported paylod for Base65536 format");
             return;
         };
@@ -158,7 +158,7 @@ fn encode(e: &Encode) {
     };
 
     let (id, body) = match payload {
-        Payload::V0(v0) => (
+        Payload::QuakePrefectureV0(v0) => (
             0,
             proto::QuakePrefectureV0 {
                 time: v0.time.0.timestamp() as u64,
@@ -198,7 +198,7 @@ fn encode(e: &Encode) {
             }
             .encode_to_vec(),
         ),
-        Payload::Tsunami(tsunami) => (
+        Payload::TsunamiForecastV0(tsunami) => (
             1,
             proto::TsunamiForecastV0 {
                 time: tsunami.time.0.timestamp() as u64,
@@ -341,7 +341,7 @@ fn decode(d: &Decode) {
 
             println!("{data:#?}");
 
-            print!("{exe} encode {mode} v0");
+            print!("{exe} encode {mode} quake-prefecture-v0");
             print!(" --time {time:?}");
 
             if let Some(epicenter) = &data.epicenter {
@@ -409,14 +409,14 @@ fn decode(d: &Decode) {
             println!();
         }
         1 => {
-            let data = crate::proto::TsunamiForecastV0::decode(body)
+            let data = proto::TsunamiForecastV0::decode(body)
                 .expect("Valid TsunamiForecastData");
 
             let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
 
             println!("{data:#?}");
 
-            print!("{exe} encode {mode} tsunami");
+            print!("{exe} encode {mode} tsunami-forecast-v0");
             print!(" --time {time:?}");
 
             for epicenter in &data.epicenter {

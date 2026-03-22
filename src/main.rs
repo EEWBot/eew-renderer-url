@@ -1,9 +1,5 @@
-pub mod quake_prefecture {
-    include!(concat!(env!("OUT_DIR"), "/quake_prefecture_v0.rs"));
-}
-
-pub mod tsunami {
-    include!(concat!(env!("OUT_DIR"), "/tsunami_v0.rs"));
+pub mod proto {
+    include!(concat!(env!("OUT_DIR"), "/net.eewbot.rs"));
 }
 
 use clap::{Parser, Subcommand};
@@ -133,7 +129,7 @@ struct TsunamiPayload {
     time: DateTimeUtc,
 
     #[arg(short, long)]
-    epicenter: Option<Epicenter>,
+    epicenter: Vec<Epicenter>,
 
     #[arg(short, long)]
     forecast: Vec<u32>,
@@ -164,39 +160,39 @@ fn encode(e: &Encode) {
     let (id, body) = match payload {
         Payload::V0(v0) => (
             0,
-            crate::quake_prefecture::QuakePrefectureData {
+            proto::QuakePrefectureV0 {
                 time: v0.time.0.timestamp() as u64,
                 epicenter: v0.epicenter.clone().map(|epicenter| {
-                    crate::quake_prefecture::Epicenter {
+                    proto::Epicenter {
                         lat_x10: epicenter.lat_x10,
                         lon_x10: epicenter.lon_x10,
                     }
                 }),
-                one: Some(crate::quake_prefecture::CodeArray {
+                one: Some(proto::CodeArray {
                     codes: v0.one.clone(),
                 }),
-                two: Some(crate::quake_prefecture::CodeArray {
+                two: Some(proto::CodeArray {
                     codes: v0.two.clone(),
                 }),
-                three: Some(crate::quake_prefecture::CodeArray {
+                three: Some(proto::CodeArray {
                     codes: v0.three.clone(),
                 }),
-                four: Some(crate::quake_prefecture::CodeArray {
+                four: Some(proto::CodeArray {
                     codes: v0.four.clone(),
                 }),
-                five_minus: Some(crate::quake_prefecture::CodeArray {
+                five_minus: Some(proto::CodeArray {
                     codes: v0.five_minus.clone(),
                 }),
-                five_plus: Some(crate::quake_prefecture::CodeArray {
+                five_plus: Some(proto::CodeArray {
                     codes: v0.five_plus.clone(),
                 }),
-                six_minus: Some(crate::quake_prefecture::CodeArray {
+                six_minus: Some(proto::CodeArray {
                     codes: v0.six_minus.clone(),
                 }),
-                six_plus: Some(crate::quake_prefecture::CodeArray {
+                six_plus: Some(proto::CodeArray {
                     codes: v0.six_plus.clone(),
                 }),
-                seven: Some(crate::quake_prefecture::CodeArray {
+                seven: Some(proto::CodeArray {
                     codes: v0.seven.clone(),
                 }),
             }
@@ -204,25 +200,26 @@ fn encode(e: &Encode) {
         ),
         Payload::Tsunami(tsunami) => (
             1,
-            crate::tsunami::TsunamiForecastData {
+            proto::TsunamiForecastV0 {
                 time: tsunami.time.0.timestamp() as u64,
                 epicenter: tsunami
                     .epicenter
-                    .clone()
-                    .map(|epicenter| crate::tsunami::Epicenter {
+                    .iter()
+                    .map(|epicenter| proto::Epicenter {
                         lat_x10: epicenter.lat_x10,
                         lon_x10: epicenter.lon_x10,
-                    }),
-                advisory: Some(tsunami::CodeArray {
+                    })
+                    .collect(),
+                advisory: Some(proto::CodeArray {
                     codes: tsunami.advisory.clone(),
                 }),
-                forecast: Some(tsunami::CodeArray {
+                forecast: Some(proto::CodeArray {
                     codes: tsunami.forecast.clone(),
                 }),
-                warning: Some(tsunami::CodeArray {
+                warning: Some(proto::CodeArray {
                     codes: tsunami.warning.clone(),
                 }),
-                major_warning: Some(tsunami::CodeArray {
+                major_warning: Some(proto::CodeArray {
                     codes: tsunami.major_warning.clone(),
                 }),
             }
@@ -337,7 +334,7 @@ fn decode(d: &Decode) {
 
     match version {
         0 => {
-            let data = crate::quake_prefecture::QuakePrefectureData::decode(body)
+            let data = proto::QuakePrefectureV0::decode(body)
                 .expect("Valid QuakePrefectureData");
 
             let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
@@ -412,7 +409,7 @@ fn decode(d: &Decode) {
             println!();
         }
         1 => {
-            let data = crate::tsunami::TsunamiForecastData::decode(body)
+            let data = crate::proto::TsunamiForecastV0::decode(body)
                 .expect("Valid TsunamiForecastData");
 
             let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
@@ -422,7 +419,7 @@ fn decode(d: &Decode) {
             print!("{exe} encode {mode} tsunami");
             print!(" --time {time:?}");
 
-            if let Some(epicenter) = &data.epicenter {
+            for epicenter in &data.epicenter {
                 print!(
                     " --epicenter {},{}",
                     epicenter.lat_x10 as f32 / 10.0,

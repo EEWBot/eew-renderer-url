@@ -63,6 +63,7 @@ struct Base65536 {
 #[derive(Subcommand, Debug)]
 enum Payload {
     TsunamiForecastV0(TsunamiForecastV0Payload),
+    TsunamiForecastV1(TsunamiForecastV1Payload),
     QuakePrefectureV0(QuakePrefectureV0Payload),
 }
 
@@ -125,6 +126,27 @@ struct QuakePrefectureV0Payload {
 
 #[derive(Parser, Debug)]
 struct TsunamiForecastV0Payload {
+    #[arg(short, long)]
+    time: DateTimeUtc,
+
+    #[arg(short, long)]
+    epicenter: Option<Epicenter>,
+
+    #[arg(short, long)]
+    forecast: Vec<u32>,
+
+    #[arg(short, long)]
+    advisory: Vec<u32>,
+
+    #[arg(short, long)]
+    warning: Vec<u32>,
+
+    #[arg(short, long)]
+    major_warning: Vec<u32>,
+}
+
+#[derive(Parser, Debug)]
+struct TsunamiForecastV1Payload {
     #[arg(short, long)]
     time: DateTimeUtc,
 
@@ -201,6 +223,32 @@ fn encode(e: &Encode) {
         Payload::TsunamiForecastV0(tsunami) => (
             1,
             proto::TsunamiForecastV0 {
+                time: tsunami.time.0.timestamp() as u64,
+                epicenter: tsunami
+                    .epicenter
+                    .as_ref()
+                    .map(|epicenter| proto::Epicenter {
+                        lat_x10: epicenter.lat_x10,
+                        lon_x10: epicenter.lon_x10,
+                    }),
+                advisory: Some(proto::CodeArray {
+                    codes: tsunami.advisory.clone(),
+                }),
+                forecast: Some(proto::CodeArray {
+                    codes: tsunami.forecast.clone(),
+                }),
+                warning: Some(proto::CodeArray {
+                    codes: tsunami.warning.clone(),
+                }),
+                major_warning: Some(proto::CodeArray {
+                    codes: tsunami.major_warning.clone(),
+                }),
+            }
+            .encode_to_vec(),
+        ),
+        Payload::TsunamiForecastV1(tsunami) => (
+            2,
+            proto::TsunamiForecastV1 {
                 time: tsunami.time.0.timestamp() as u64,
                 epicenter: tsunami
                     .epicenter
@@ -335,7 +383,7 @@ fn decode(d: &Decode) {
     match version {
         0 => {
             let data = proto::QuakePrefectureV0::decode(body)
-                .expect("Valid QuakePrefectureData");
+                .expect("Valid QuakePrefectureV0");
 
             let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
 
@@ -410,13 +458,58 @@ fn decode(d: &Decode) {
         }
         1 => {
             let data = proto::TsunamiForecastV0::decode(body)
-                .expect("Valid TsunamiForecastData");
+                .expect("Valid TsunamiForecastV0");
 
             let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
 
             println!("{data:#?}");
 
             print!("{exe} encode {mode} tsunami-forecast-v0");
+            print!(" --time {time:?}");
+
+            if let Some(epicenter) = &data.epicenter {
+                print!(
+                    " --epicenter {},{}",
+                    epicenter.lat_x10 as f32 / 10.0,
+                    epicenter.lon_x10 as f32 / 10.0,
+                );
+            }
+
+            if let Some(forecast) = &data.forecast {
+                for code in &forecast.codes {
+                    print!(" --forecast {code}");
+                }
+            }
+
+            if let Some(advisory) = &data.advisory {
+                for code in &advisory.codes {
+                    print!(" --advisory {code}");
+                }
+            }
+
+            if let Some(warning) = &data.warning {
+                for code in &warning.codes {
+                    print!(" --warning {code}");
+                }
+            }
+
+            if let Some(major_warning) = &data.major_warning {
+                for code in &major_warning.codes {
+                    print!(" --major-warning {code}");
+                }
+            }
+
+            println!();
+        }
+        2 => {
+            let data = proto::TsunamiForecastV1::decode(body)
+                .expect("Valid TsunamiForecastV1");
+
+            let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
+
+            println!("{data:#?}");
+
+            print!("{exe} encode {mode} tsunami-forecast-v1");
             print!(" --time {time:?}");
 
             for epicenter in &data.epicenter {

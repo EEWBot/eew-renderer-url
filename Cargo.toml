@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.56", features = ["derive"] }
 dateparser = "0.3.0"
-hmac = "0.12.1"
+hmac = "0.13.0"
 prost = "0.14.0"
 sha1 = "0.10.6"
 base65536 = "1.0.1"

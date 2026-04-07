@@ -4,7 +4,7 @@ pub mod proto {
 
 use clap::{Parser, Subcommand};
 use dateparser::DateTimeUtc;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, Mac, KeyInit};
 use prost::Message;
 
 type HmacSha1 = Hmac<sha1::Sha1>;

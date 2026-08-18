@@ -4,7 +4,7 @@ pub mod proto {
 
 use clap::{Parser, Subcommand};
 use dateparser::DateTimeUtc;
-use hmac::{Hmac, Mac, KeyInit};
+use hmac::{Hmac, KeyInit, Mac};
 use prost::Message;
 
 type HmacSha1 = Hmac<sha1::Sha1>;
@@ -65,6 +65,7 @@ enum Payload {
     TsunamiForecastV0(TsunamiForecastV0Payload),
     TsunamiForecastV1(TsunamiForecastV1Payload),
     QuakePrefectureV0(QuakePrefectureV0Payload),
+    QuakeWarningV0(QuakeWarningV0Payload),
 }
 
 #[derive(Clone, Debug)]
@@ -166,6 +167,18 @@ struct TsunamiForecastV1Payload {
     major_warning: Vec<u32>,
 }
 
+#[derive(Parser, Debug)]
+struct QuakeWarningV0Payload {
+    #[arg(short, long)]
+    time: DateTimeUtc,
+
+    #[arg(short, long)]
+    epicenter: Option<Epicenter>,
+
+    #[arg(long)]
+    warning: Vec<u32>,
+}
+
 fn encode(e: &Encode) {
     if let Encoding::Base65536(payload) = &e.encoding {
         let Payload::QuakePrefectureV0(_) = payload.payload else {
@@ -184,11 +197,9 @@ fn encode(e: &Encode) {
             0,
             proto::QuakePrefectureV0 {
                 time: v0.time.0.timestamp() as u64,
-                epicenter: v0.epicenter.clone().map(|epicenter| {
-                    proto::Epicenter {
-                        lat_x10: epicenter.lat_x10,
-                        lon_x10: epicenter.lon_x10,
-                    }
+                epicenter: v0.epicenter.clone().map(|epicenter| proto::Epicenter {
+                    lat_x10: epicenter.lat_x10,
+                    lon_x10: epicenter.lon_x10,
                 }),
                 one: Some(proto::CodeArray {
                     codes: v0.one.clone(),
@@ -269,6 +280,20 @@ fn encode(e: &Encode) {
                 }),
                 major_warning: Some(proto::CodeArray {
                     codes: tsunami.major_warning.clone(),
+                }),
+            }
+            .encode_to_vec(),
+        ),
+        Payload::QuakeWarningV0(warning) => (
+            3,
+            proto::QuakeWarningV0 {
+                time: warning.time.0.timestamp() as u64,
+                epicenter: warning.epicenter.clone().map(|epicenter| proto::Epicenter {
+                    lat_x10: epicenter.lat_x10,
+                    lon_x10: epicenter.lon_x10,
+                }),
+                warning: Some(proto::CodeArray {
+                    codes: warning.warning.clone(),
                 }),
             }
             .encode_to_vec(),
@@ -382,8 +407,7 @@ fn decode(d: &Decode) {
 
     match version {
         0 => {
-            let data = proto::QuakePrefectureV0::decode(body)
-                .expect("Valid QuakePrefectureV0");
+            let data = proto::QuakePrefectureV0::decode(body).expect("Valid QuakePrefectureV0");
 
             let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
 
@@ -457,8 +481,7 @@ fn decode(d: &Decode) {
             println!();
         }
         1 => {
-            let data = proto::TsunamiForecastV0::decode(body)
-                .expect("Valid TsunamiForecastV0");
+            let data = proto::TsunamiForecastV0::decode(body).expect("Valid TsunamiForecastV0");
 
             let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
 
@@ -502,8 +525,7 @@ fn decode(d: &Decode) {
             println!();
         }
         2 => {
-            let data = proto::TsunamiForecastV1::decode(body)
-                .expect("Valid TsunamiForecastV1");
+            let data = proto::TsunamiForecastV1::decode(body).expect("Valid TsunamiForecastV1");
 
             let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
 
@@ -541,6 +563,32 @@ fn decode(d: &Decode) {
             if let Some(major_warning) = &data.major_warning {
                 for code in &major_warning.codes {
                     print!(" --major-warning {code}");
+                }
+            }
+
+            println!();
+        }
+        3 => {
+            let data = proto::QuakeWarningV0::decode(body).expect("Valid TsunamiForecastV1");
+
+            let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
+
+            println!("{data:#?}");
+
+            print!("{exe} encode {mode} quake-warning-v0");
+            print!(" --time {time:?}");
+
+            if let Some(epicenter) = &data.epicenter {
+                print!(
+                    " --epicenter {},{}",
+                    epicenter.lat_x10 as f32 / 10.0,
+                    epicenter.lon_x10 as f32 / 10.0,
+                );
+            }
+
+            if let Some(warning) = &data.warning {
+                for code in &warning.codes {
+                    print!(" --warning {code}");
                 }
             }
 

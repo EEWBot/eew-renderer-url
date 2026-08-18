@@ -569,7 +569,7 @@ fn decode(d: &Decode) {
             println!();
         }
         3 => {
-            let data = proto::QuakeWarningV0::decode(body).expect("Valid TsunamiForecastV1");
+            let data = proto::QuakeWarningV0::decode(body).expect("Valid QuakeWarningV0");
 
             let time = chrono::DateTime::from_timestamp_secs(data.time as i64).unwrap();
 
